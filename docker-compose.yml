@@ -1,0 +1,46 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-gamelist}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gamelist}
+      POSTGRES_DB: ${POSTGRES_DB:-gamelist}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-gamelist} -d ${POSTGRES_DB:-gamelist}"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    init: true
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgres://${POSTGRES_USER:-gamelist}:${POSTGRES_PASSWORD:-gamelist}@db:5432/${POSTGRES_DB:-gamelist}
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+      TOKEN_SECRET: ${TOKEN_SECRET:-dev-only-secret-change-me}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./index.html:/usr/share/nginx/html/index.html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api
+
+  # Testes unitários + cobertura: `docker compose run --rm test`
+  test:
+    build: .
+    profiles: ["test"]
+    command: ["npm", "run", "coverage"]
+
+volumes:
+  db_data:
